@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pacmocaverse Collision Game</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: #1a1a2e;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        #gameCanvas {
+            border: 2px solid #e94560;
+            border-radius: 10px;
+        }
+        #instructions {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 18px;
+            text-align: center;
+        }
+        #endGameMenu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            display: none;
+        }
+        #tryAgainButton {
+            background-color: #e94560;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="instructions">Goal: Make the characters collide as quickly as possible!</div>
+    <div id="endGameMenu">
+        <h2 id="endGameText" style="color: white; font-size: 36px;">PACMOCAVERSE</h2>
+        <p id="timeResult" style="color: white; font-size: 24px;"></p>
+        <button id="tryAgainButton">Try Again</button>
+    </div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const endGameMenu = document.getElementById('endGameMenu');
+        const tryAgainButton = document.getElementById('tryAgainButton');
+        const timeResult = document.getElementById('timeResult');
+
+        class Character {
+            constructor(x, y, radius, color, isEyeCharacter = false) {
+                this.x = x;
+                this.y = y;
+                this.radius = radius;
+                this.color = color;
+                this.dx = (Math.random() - 0.5) * 4;
+                this.dy = (Math.random() - 0.5) * 4;
+                this.isEyeCharacter = isEyeCharacter;
+            }
+
+            draw() {
+                if (this.isEyeCharacter) {
+                    this.drawPinkCharacter();
+                } else {
+                    this.drawYellowCharacter();
+                }
+            }
+
+            drawPinkCharacter() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.closePath();
+
+                const eyeRadius = this.radius * 0.3;
+                const eyePositions = [
+                    {x: this.x - this.radius * 0.5, y: this.y - this.radius * 0.1},
+                    {x: this.x, y: this.y - this.radius * 0.1},
+                    {x: this.x + this.radius * 0.5, y: this.y - this.radius * 0.1}
+                ];
+
+                eyePositions.forEach(pos => {
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, eyeRadius, 0, Math.PI * 2);
+                    ctx.fillStyle = 'white';
+                    ctx.fill();
+                    ctx.strokeStyle = 'black';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    ctx.closePath();
+
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, eyeRadius * 0.4, 0, Math.PI * 2);
+                    ctx.fillStyle = 'black';
+                    ctx.fill();
+                    ctx.closePath();
+                });
+
+                ctx.beginPath();
+                ctx.arc(this.x, this.y + this.radius * 0.3, this.radius * 0.4, 0, Math.PI);
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.closePath();
+            }
+
+            drawYellowCharacter() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.closePath();
+
+                for (let i = 0; i < 2; i++) {
+                    const angle = (i / 2) * Math.PI - Math.PI / 4;
+                    const eyeX = this.x + Math.cos(angle) * this.radius * 0.5;
+                    const eyeY = this.y + Math.sin(angle) * this.radius * 0.5;
+                    ctx.beginPath();
+                    ctx.arc(eyeX, eyeY, this.radius * 0.15, 0, Math.PI * 2);
+                    ctx.fillStyle = 'black';
+                    ctx.fill();
+                    ctx.closePath();
+                }
+            }
+
+            move(obstacles) {
+                let newX = this.x + this.dx;
+                let newY = this.y + this.dy;
+
+                if (this.checkCollision(newX, newY, obstacles)) {
+                    this.dx = -this.dx;
+                    this.dy = -this.dy;
+                } else {
+                    this.x = newX;
+                    this.y = newY;
+                }
+
+                if (this.x - this.radius < 0 || this.x + this.radius > canvas.width) {
+                    this.dx = -this.dx;
+                    this.x = Math.max(this.radius, Math.min(canvas.width - this.radius, this.x));
+                }
+                if (this.y - this.radius < 0 || this.y + this.radius > canvas.height) {
+                    this.dy = -this.dy;
+                    this.y = Math.max(this.radius, Math.min(canvas.height - this.radius, this.y));
+                }
+            }
+
+            checkCollision(x, y, obstacles) {
+                for (let obstacle of obstacles) {
+                    if (x + this.radius > obstacle.x && 
+                        x - this.radius < obstacle.x + obstacle.width &&
+                        y + this.radius > obstacle.y && 
+                        y - this.radius < obstacle.y + obstacle.height) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        }
+
+        let pinkCharacter, yellowCharacter;
+        let startTime, elapsedTime;
+        let gameOver = false;
+        let obstacles = [];
+
+        function initGame() {
+            pinkCharacter = new Character(50, canvas.height / 2, 20, 'pink', true);
+            yellowCharacter = new Character(canvas.width - 50, canvas.height / 2, 20, 'yellow', false);
+            startTime = new Date();
+            gameOver = false;
+            createObstacles();
+            endGameMenu.style.display = 'none';
+        }
+
+        function createObstacles() {
+            obstacles = [
+                {x: 200, y: 100, width: 20, height: 200},
+                {x: 400, y: 300, width: 20, height: 200},
+                {x: 600, y: 100, width: 20, height: 200},
+            ];
+        }
+
+        function drawObstacles() {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            obstacles.forEach(obstacle => {
+                ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+            });
+        }
+
+        function checkCharacterCollision() {
+            const dx = pinkCharacter.x - yellowCharacter.x;
+            const dy = pinkCharacter.y - yellowCharacter.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < pinkCharacter.radius + yellowCharacter.radius) {
+                gameOver = true;
+                elapsedTime = (new Date() - startTime) / 1000;
+                showEndGameMenu();
+            }
+        }
+
+        function showEndGameMenu() {
+            endGameMenu.style.display = 'block';
+            timeResult.textContent = `Time: ${elapsedTime.toFixed(2)} seconds`;
+        }
+
+        function drawBackground() {
+            const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            gradient.addColorStop(0, '#0f0c29');
+            gradient.addColorStop(0.5, '#302b63');
+            gradient.addColorStop(1, '#24243e');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            for (let i = 0; i < 100; i++) {
+                ctx.beginPath();
+                ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 2, 0, Math.PI * 2);
+                ctx.fillStyle = 'white';
+                ctx.fill();
+            }
+        }
+
+        function drawTimer() {
+            const currentTime = new Date();
+            const elapsedTime = (currentTime - startTime) / 1000;
+            ctx.font = '24px Arial';
+            ctx.fillStyle = 'white';
+            ctx.fillText(`Time: ${elapsedTime.toFixed(2)}`, 10, 30);
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBackground();
+
+            if (!gameOver) {
+                pinkCharacter.draw();
+                pinkCharacter.move(obstacles);
+
+                yellowCharacter.draw();
+                yellowCharacter.move(obstacles);
+
+                drawObstacles();
+                checkCharacterCollision();
+                drawTimer();
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        canvas.addEventListener('mousemove', (event) => {
+            if (gameOver) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = event.clientX - rect.left;
+            const mouseY = event.clientY - rect.top;
+
+            pinkCharacter.dx += (mouseX - pinkCharacter.x) * 0.005;
+            pinkCharacter.dy += (mouseY - pinkCharacter.y) * 0.005;
+
+            yellowCharacter.dx -= (mouseX - yellowCharacter.x) * 0.005;
+            yellowCharacter.dy -= (mouseY - yellowCharacter.y) * 0.005;
+
+            const maxSpeed = 5;
+            pinkCharacter.dx = Math.max(Math.min(pinkCharacter.dx, maxSpeed), -maxSpeed);
+            pinkCharacter.dy = Math.max(Math.min(pinkCharacter.dy, maxSpeed), -maxSpeed);
+            yellowCharacter.dx = Math.max(Math.min(yellowCharacter.dx, maxSpeed), -maxSpeed);
+            yellowCharacter.dy = Math.max(Math.min(yellowCharacter.dy, maxSpeed), -maxSpeed);
+        });
+
+        tryAgainButton.addEventListener('click', () => {
+            initGame();
+        });
+
+        initGame();
+        gameLoop();
+    </script>
+</body>
+</html>
